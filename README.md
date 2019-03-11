@@ -3,3 +3,6 @@
 
 ## API地址域名地址
 域名地址：https://www.BW.com
+
+## 签名及密码加密规则
+https://github.com/bw-exchange/api/blob/master/签名及密码加密规则
