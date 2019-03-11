@@ -1,0 +1,135 @@
+签名规则
+签名串sign=md5(Apiid+Timestamp+参数内容拼串+签名秘钥),签名秘钥为Api Secret,和Apiid在网站打开Api功能时获取，参数拼串内容规则，有三种，只有header参数的为空字符串""，body json格式的参数为body参数的json字符串格式，key-value以及get形式的参数内容拼串为所有参数按key值首字母排序后再按key1+value1+key2+value2...的形式拼串。签名后将 Apiid、Timestamp、Sign放入到请求header中，注意首字母大写，后面全小写。
+比如在网站打开API功能后拿到下面两个参数 Apiid=7eESLc0x69I7eESLc0x69J,Apisecret = 87ceba599b6d39a39deb01cf71eacd57，Timestamp=1533179478000,
+
+a、Body json 格式参数
+            参数内容json字符串为：{"userId":"u111","name":"zhangsan"}
+            参数内容拼串为：{"userId":"u111","name":"zhangsan"}
+            则Sign = md5(7eESLc0x69I7eESLc0x69J1533179478000{"userId":"u111","name":"zhangsan"}87ceba599b6d39a39deb01cf71eacd57)
+            = 9bd4ef5f834add851badb0bbd5bb0f2c
+          
+        
+b、没有任何body或get参数
+            参数内容拼串为空
+            则Sign = md5(7eESLc0x69I7eESLc0x69J153317947800087ceba599b6d39a39deb01cf71eacd57)
+            = 935b6a59860cc12e802e5dee30c6a614
+          
+        
+c、formdata key-value，或者get参数          
+            参数内容为：userid=10,status=1,acount = 10
+            参数内容拼串为：account10status1userid10
+            则Sign = md5(7eESLc0x69I7eESLc0x69J1533179478000account10status1userid1087ceba599b6d39a39deb01cf71eacd57)
+            = 6f732b47933684dd11a770d6575f43fa
+          
+        
+提供Java版本的签名代码如下，其他语言请参考代码自行实现
+          
+            import com.alibaba.fastjson.JSON;
+            import java.nio.charset.Charset;
+            import java.security.MessageDigest;
+            import java.security.NoSuchAlgorithmException;
+            import java.util.HashMap;
+            import java.util.Map;
+
+            /**
+            * @Author:
+            * @Description:
+            * @Date: Created in 2018/6/26  下午3:48
+            * @Modified By:
+            */
+            public class SignUtils {
+                private static Charset DEFAULT_CHARSET = Charset.forName("UTF-8");
+
+                /**
+                * 自行根据需要设置,一般认为一个服务里使用的只有一个
+                */
+                public static String ID_NAME = "Apiid";
+
+                /**
+                * 不为空、不为空字符串、不为双引号、不为空{}
+                *
+                * @param source
+                * @return
+                */
+                public static boolean isEmpty(String source) {
+                    return source == null || source.isEmpty() || source.equals("\"\"") || source.trim().equals("{}");
+                }
+
+                /**
+                * 参数是formdata key value，或者get参数 形式的情况下获取签名header
+                * @param parameters
+                * @return
+                */
+                public static Map getHeaderOfKeyValue(String id, String secret,Map<String, Object> parameters) {
+                    long time = System.currentTimeMillis();
+                    Map header = new HashMap();
+                    StringBuffer contentSb = new StringBuffer();
+                    parameters = new TreeMap<>(parameters);
+                    Iterator it = parameters.entrySet().iterator();
+                    while(it.hasNext()){
+                        Map.Entry entry = (Map.Entry)it.next();
+                        contentSb.append(entry.getKey()).append(entry.getValue());
+                    }
+
+                    header.put(ID_NAME,id);
+                    header.put("Timestamp", String.valueOf(time));
+                    header.put("Sign", encryptMD5(id + time + contentSb.toString() + secret));
+                    return header;
+                }
+
+                /**
+                * 参数为空情况下获取签名header
+                * @return
+                */
+                public static Map getHeaderOfNoParams(String id, String secret) {
+                    Map header = new HashMap();
+                    long time = System.currentTimeMillis();
+                    header.put(ID_NAME, id);
+                    header.put("Timestamp", String.valueOf(time));
+                    header.put("Sign", encryptMD5(id + time + secret));
+                    return header;
+
+                }
+
+                /**
+                * 参数是body json形式的情况下获取签名header
+                * @param object
+                * @return
+                */
+                public static Map getHeaderOfBodyJson(String id, String secret, Object object) {
+                    Map header = new HashMap();
+                    long time = System.currentTimeMillis();
+                    String params = JSON.toJSONString(object);
+                    header.put(ID_NAME, id);
+                    header.put("Timestamp", String.valueOf(time));
+                    header.put("Sign", encryptMD5(id + time + params + secret));
+                    return header;
+                }
+
+                public static String encryptMD5(String str) {
+                    return digest("MD5", str);
+                }
+
+                public static String digest(String code, String str) {
+                    try {
+                        MessageDigest messageDigest = MessageDigest.getInstance(code);
+                        messageDigest.reset();
+                        messageDigest.update(str.getBytes(DEFAULT_CHARSET));
+                        byte[] byteArray = messageDigest.digest();
+                        StringBuffer md5StrBuff = new StringBuffer();
+
+                        for(int i = 0; i < byteArray.length; ++i) {
+                            if (Integer.toHexString(255 & byteArray[i]).length() == 1) {
+                                md5StrBuff.append("0").append(Integer.toHexString(255 & byteArray[i]));
+                            } else {
+                                md5StrBuff.append(Integer.toHexString(255 & byteArray[i]));
+                            }
+                        }
+
+                        return md5StrBuff.toString();
+                    } catch (NoSuchAlgorithmException var6) {
+                        var6.printStackTrace();
+                        return null;
+                    }
+                }
+            }
